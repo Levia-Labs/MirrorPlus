@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Mirror+ wind rose logo">
+  <circle cx="80" cy="80" r="70" fill="none" stroke="#9aa4b2" stroke-width="2" opacity="0.5"/>
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="7">
+    <g stroke="#3b8cf2">
+      <path d="M80 80 L80 18 M72 28 L80 18 L88 28"/>
+      <path d="M80 80 L142 80 M132 72 L142 80 L132 88"/>
+      <path d="M80 80 L80 142 M72 132 L80 142 L88 132"/>
+      <path d="M80 80 L18 80 M28 72 L18 80 L28 88"/>
+    </g>
+    <g stroke="#f28c3b" stroke-width="5">
+      <path d="M80 80 L124 36 M112 36 L124 36 L124 48"/>
+      <path d="M80 80 L124 124 M124 112 L124 124 L112 124"/>
+      <path d="M80 80 L36 124 M48 124 L36 124 L36 112"/>
+      <path d="M80 80 L36 36 M36 48 L36 36 L48 36"/>
+    </g>
+  </g>
+  <circle cx="80" cy="80" r="7" fill="#1f2937"/>
+</svg>

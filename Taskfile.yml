@@ -1,0 +1,37 @@
+version: "3"
+
+includes:
+  git: .crepidoma/taskfiles/git
+  repo: .crepidoma/taskfiles/repo
+
+vars:
+  PY: '{{if eq OS "windows"}}python{{else}}python3{{end}}'
+  UVRUN: uv run --no-project --python ">=3.12"
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  test:
+    desc: Run the pure-Python geometry unit tests (no GIMP needed)
+    cmds:
+      - '{{.UVRUN}} tests/test_mirror_plus_geometry.py'
+
+  install:
+    desc: Copy mirror-plus/ into the GIMP 3 user plug-ins folder (DEST overrides the path)
+    cmds:
+      - '{{.UVRUN}} tasks/install_plugin.py {{.DEST}}'
+
+  smoke:
+    desc: Run the PDB smoke test inside headless GIMP (GIMP_CONSOLE overrides the executable)
+    deps: [install]
+    cmds:
+      - '{{.UVRUN}} tasks/run_smoke.py {{.GIMP_CONSOLE}}'
+
+  check:
+    desc: Full gate - unit tests then headless GIMP smoke test
+    cmds:
+      - task: test
+      - task: smoke
