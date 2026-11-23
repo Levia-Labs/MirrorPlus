@@ -8,46 +8,13 @@ gi.require_version("GimpUi", "3.0")
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gdk, GdkPixbuf, Gimp, GimpUi, GLib, GObject, Gtk  # noqa: E402
+from gi.repository import Gdk, GimpUi, GObject, Gtk  # noqa: E402
 
-import cairo  # noqa: E402
 import mirror_plus_geometry as geo  # noqa: E402
+from mirror_plus_preview import PreviewWidget  # noqa: E402
 
 ROSE_SIZE = 240
-PREVIEW_SIZE = 380
-THUMB_MAX = 512
-TINT_ALPHA = 0.55
-BACKDROP_ALPHA = 0.35
 
-
-def _pixbuf_from_data(width, height, bpp, data):
-    raw = data if isinstance(data, GLib.Bytes) else GLib.Bytes.new(bytes(data))
-    return GdkPixbuf.Pixbuf.new_from_bytes(
-        raw, GdkPixbuf.Colorspace.RGB, bpp == 4, 8, width, height, width * bpp)
-
-
-def _thumb_size(width, height, max_side):
-    scale = min(1.0, max_side / max(width, height))
-    return max(1, int(width * scale)), max(1, int(height * scale))
-
-
-def drawable_pixbuf(drawable, max_side=THUMB_MAX):
-    """Thumbnail of a drawable as a GdkPixbuf, trying both libgimp entry points."""
-    tw, th = _thumb_size(drawable.get_width(), drawable.get_height(), max_side)
-    try:
-        return drawable.get_thumbnail(tw, th, Gimp.PixbufTransparency.KEEP_ALPHA)
-    except (AttributeError, TypeError):
-        _ok, aw, ah, bpp, data = drawable.get_thumbnail_data(tw, th)
-        return _pixbuf_from_data(aw, ah, bpp, data)
-
-
-def image_pixbuf(image, max_side=THUMB_MAX):
-    tw, th = _thumb_size(image.get_width(), image.get_height(), max_side)
-    try:
-        return image.get_thumbnail(tw, th, Gimp.PixbufTransparency.KEEP_ALPHA)
-    except (AttributeError, TypeError):
-        _ok, aw, ah, bpp, data = image.get_thumbnail_data(tw, th)
-        return _pixbuf_from_data(aw, ah, bpp, data)
 
 
 class RoseWidget(Gtk.DrawingArea):
@@ -124,94 +91,19 @@ class RoseWidget(Gtk.DrawingArea):
         cr.show_text(label)
 
 
-class PreviewWidget(Gtk.DrawingArea):
-    """Composites rotated thumbnails over a dimmed image thumbnail."""
-
-    def __init__(self, image, layer):
-        super().__init__()
-        self.set_size_request(PREVIEW_SIZE, PREVIEW_SIZE)
-        self.count, self.mask, self.tint = 8, 0, False
-        self.layer_pixbuf = drawable_pixbuf(layer)
-        try:
-            self.image_pixbuf = image_pixbuf(image)
-        except Exception:  # noqa: BLE001 - the backdrop is optional
-            self.image_pixbuf = None
-        self.image_w, self.image_h = image.get_width(), image.get_height()
-        _ok, ox, oy = layer.get_offsets()
-        self.layer_w, self.layer_h = layer.get_width(), layer.get_height()
-        self.center = (ox + self.layer_w / 2, oy + self.layer_h / 2)
-        self.connect("draw", self._on_draw)
-
-    def update(self, count, mask, tint):
-        self.count, self.mask, self.tint = count, mask, tint
-        self.queue_draw()
-
-    def _bounds(self):
-        half = geo.rotated_bounds(self.layer_w, self.layer_h) / 2
-        cx, cy = self.center
-        x0, y0 = min(0, cx - half), min(0, cy - half)
-        x1, y1 = max(self.image_w, cx + half), max(self.image_h, cy + half)
-        return x0, y0, x1 - x0, y1 - y0
-
-    def _on_draw(self, _widget, cr):
-        alloc = self.get_allocation()
-        bx, by, bw, bh = self._bounds()
-        scale = min(alloc.width / bw, alloc.height / bh)
-        cr.translate((alloc.width - bw * scale) / 2, (alloc.height - bh * scale) / 2)
-        cr.scale(scale, scale)
-        cr.translate(-bx, -by)
-        self._draw_backdrop(cr)
-        for index in geo.selected_indices(self.mask, self.count):
-            self._draw_copy(cr, index)
-        return True
-
-    def _draw_backdrop(self, cr):
-        cr.set_source_rgba(0.5, 0.5, 0.5, 0.2)
-        cr.rectangle(0, 0, self.image_w, self.image_h)
-        cr.fill()
-        if self.image_pixbuf is None:
-            return
-        cr.save()
-        cr.scale(self.image_w / self.image_pixbuf.get_width(),
-                 self.image_h / self.image_pixbuf.get_height())
-        Gdk.cairo_set_source_pixbuf(cr, self.image_pixbuf, 0, 0)
-        cr.paint_with_alpha(BACKDROP_ALPHA)
-        cr.restore()
-
-    def _draw_copy(self, cr, index):
-        cr.save()
-        cr.translate(*self.center)
-        cr.rotate(math.radians(geo.angle_degrees(index, self.count)))
-        cr.translate(-self.layer_w / 2, -self.layer_h / 2)
-        cr.scale(self.layer_w / self.layer_pixbuf.get_width(),
-                 self.layer_h / self.layer_pixbuf.get_height())
-        if self.tint:
-            cr.push_group()
-        Gdk.cairo_set_source_pixbuf(cr, self.layer_pixbuf, 0, 0)
-        cr.paint()
-        if self.tint:
-            # ATOP keeps the copy's alpha and lays a translucent color over it.
-            cr.set_operator(cairo.OPERATOR_ATOP)
-            cr.set_source_rgba(*geo.tint_rgb(index, self.count), TINT_ALPHA)
-            cr.paint()
-            cr.pop_group_to_source()
-            cr.set_operator(cairo.OPERATOR_OVER)
-            cr.paint()
-        cr.restore()
-
 
 class MirrorPlusDialog:
     """Modal dialog; `run()` returns a settings dict or None when cancelled."""
 
     PRESETS = (("+", "plus"), ("x", "cross"), ("Full", "full"), ("None", "none"))
 
-    def __init__(self, image, layer, directions, mask, merge, tint):
+    def __init__(self, image, layer, directions, mask, merge, tint, visible=False):
         use_header_bar = Gtk.Settings.get_default().get_property("gtk-dialogs-use-header")
         self.dialog = GimpUi.Dialog(use_header_bar=use_header_bar, title="Mirror+")
         self.dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
         self.dialog.add_button("_Apply", Gtk.ResponseType.OK)
         self.rose = RoseWidget(directions, mask, tint)
-        self.preview = PreviewWidget(image, layer)
+        self.preview = PreviewWidget(image, layer, visible)
         self.spin = Gtk.SpinButton.new_with_range(geo.MIN_DIRECTIONS, geo.MAX_DIRECTIONS, 1)
         self.spin.set_value(directions)
         self.merge_check = Gtk.CheckButton.new_with_label("Merge copies into one layer")
@@ -219,7 +111,15 @@ class MirrorPlusDialog:
         self.tint_check = Gtk.CheckButton.new_with_label(
             "Tint copies (preview; color tags when unmerged)")
         self.tint_check.set_active(tint)
+        self.layer_radio = Gtk.RadioButton.new_with_label(None, "Selected layer")
+        self.visible_radio = Gtk.RadioButton.new_with_label_from_widget(
+            self.layer_radio, "Visible")
+        self.visible_radio.set_active(visible)
+        self.refresh_button = Gtk.Button.new_with_mnemonic("_Refresh preview")
         self._build(self.dialog.get_content_area())
+        self.visible_radio.connect(
+            "toggled", lambda *_: self.preview.set_source(self.visible_radio.get_active()))
+        self.refresh_button.connect("clicked", lambda *_: self.preview.reload())
         self.rose.connect("changed", lambda *_: self._refresh())
         self.spin.connect("value-changed", self._on_count)
         self.tint_check.connect("toggled", lambda *_: self._refresh())
@@ -239,8 +139,14 @@ class MirrorPlusDialog:
             button.connect("clicked", self._on_preset, kind)
             presets.pack_start(button, True, True, 0)
         left.pack_start(presets, False, False, 0)
+        source = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        source.pack_start(Gtk.Label(label="Source"), False, False, 0)
+        source.pack_start(self.layer_radio, False, False, 0)
+        source.pack_start(self.visible_radio, False, False, 0)
+        left.pack_start(source, False, False, 0)
         left.pack_start(self.merge_check, False, False, 0)
         left.pack_start(self.tint_check, False, False, 0)
+        left.pack_end(self.refresh_button, False, False, 0)
         hbox.pack_start(left, False, False, 0)
         frame = Gtk.Frame(label="Preview")
         frame.add(self.preview)
@@ -271,6 +177,7 @@ class MirrorPlusDialog:
                 "mask": self.rose.mask,
                 "merge": self.merge_check.get_active(),
                 "tint": self.tint_check.get_active(),
+                "visible": self.visible_radio.get_active(),
             }
         self.dialog.destroy()
         return settings

@@ -2,7 +2,8 @@
 
 Copies the source layer once per selected arrow, rotates each copy around the
 layer center by the arrow angle and optionally merges the copies back into a
-single layer that replaces the original.
+single layer that replaces the original; the Visible source first adds a
+layer from the visible composite and fans that instead.
 """
 import math
 
@@ -86,3 +87,22 @@ def apply_mirror(image, layer, directions, mask, merge=True, tag_colors=False):
         restore_selection()
         image.undo_group_end()
         Gimp.context_pop()
+
+
+def new_visible_layer(image, name="Visible"):
+    """Add the visible composite as a top layer, like Layer > New from Visible."""
+    layer = Gimp.Layer.new_from_visible(image, image, name)
+    image.insert_layer(layer, None, 0)
+    return layer
+
+
+def apply_mirror_visible(image, directions, mask, merge=True, tag_colors=False):
+    """Fan the visible composite; the outer undo group makes the run one undo step."""
+    if not geo.selected_indices(mask, directions):
+        return []
+    image.undo_group_start()
+    try:
+        layer = new_visible_layer(image)
+        return apply_mirror(image, layer, directions, mask, merge=merge, tag_colors=tag_colors)
+    finally:
+        image.undo_group_end()

@@ -24,8 +24,13 @@ Good for radial ornaments, snowflakes, gear teeth, mandala petals and any
    `name 45°`, `name 90°`, and so on.
 6. Single undo step. The active selection is set aside during the rotations and
    restored afterwards, so whole layers rotate.
-7. Scriptable: procedure `python-fu-mirror-plus` with arguments `directions`,
-   `mask` (bit i selects arrow i), `merge`, `tint`.
+7. Source: fan the selected layer (default) or the visible composite of the whole
+   image. Visible keeps the original layers and puts the result on top, like
+   Layer > New from Visible.
+8. Refresh preview button re-reads the thumbnails from GIMP, so changes made
+   in GIMP while the dialog is open show up in the preview.
+9. Scriptable: procedure `python-fu-mirror-plus` with arguments `directions`,
+   `mask` (bit i selects arrow i), `merge`, `tint`, `visible`.
 
 ## Requirements
 
@@ -41,8 +46,8 @@ task install          # copies mirror-plus/ into the GIMP 3 user plug-ins folder
 ```
 
 Without the task runner, copy the `mirror-plus` folder into
-`%APPDATA%\GIMP\3.0\plug-ins\` (Windows) or `~/.config/GIMP/3.0/plug-ins/`
-(Linux, macOS). Restart GIMP, select a layer, open `Layer > Transform > Mirror+...`.
+`%APPDATA%\GIMP\3.2\plug-ins\` (Windows) or `~/.config/GIMP/3.2/plug-ins/`
+(Linux, macOS), using the folder that matches your installed GIMP 3 series. Restart GIMP, select a layer, open `Layer > Transform > Mirror+...`.
 
 ## Development
 
@@ -53,7 +58,7 @@ task check            # both
 ```
 
 Layout: `mirror-plus/` is the plug-in (registration, pure geometry, layer
-operations, GTK dialog), `tests/` holds the unit and smoke tests, `tasks/`
+operations, GTK dialog and preview widget), `tests/` holds the unit and smoke tests, `tasks/`
 the install and smoke runners.
 
 ## Links

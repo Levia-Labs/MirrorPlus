@@ -6,6 +6,8 @@ Env: MIRROR_SMOKE_OUT = path of the result file (one line per check).
 Builds a 200x200 image with one 60x20 layer offset from the center, runs
 python-fu-mirror-plus non-interactively with 4 directions, full mask, merge on,
 then checks the image holds one layer whose bounds grew to cover the rotations.
+Case 2: unmerged tinted 3-way on layer "dots". Case 3: visible=True, 2 directions,
+merge on; one new top layer named "Visible" covering the whole image.
 """
 import os
 
@@ -81,6 +83,40 @@ def run():
     check("three tagged copies", len(names) == 4, ";".join(names))
     tags = {item.get_color_tag() for item in image.get_layers() if item.get_name() != "bar"}
     check("distinct color tags", len(tags) == 3, str(tags))
+
+    # Visible source: fans the composite, adds one top layer, keeps the originals.
+    before = len(image.get_layers())
+    config3 = proc.create_config()
+    config3.set_property("run-mode", Gimp.RunMode.NONINTERACTIVE)
+    config3.set_property("image", image)
+    config3.set_core_object_array("drawables", [image.get_layers()[0]])  # layer2 was consumed
+    config3.set_property("directions", 2)
+    config3.set_property("mask", 3)
+    config3.set_property("merge", True)
+    config3.set_property("visible", True)
+    result3 = proc.run(config3)
+    check("visible run SUCCESS", result3.index(0) == Gimp.PDBStatusType.SUCCESS,
+          str(result3.index(0)) + " " + str(result3.index(1) if result3.length() > 1 else ""))
+    top_layers = image.get_layers()
+    check("visible adds one layer", len(top_layers) == before + 1,
+          f"{before}->{len(top_layers)}")
+    check("visible layer on top", top_layers[0].get_name() == "Visible", top_layers[0].get_name())
+    vis = top_layers[0]
+    check("visible bounds cover image", vis.get_width() >= 200 and vis.get_height() >= 200,
+          f"{vis.get_width()}x{vis.get_height()}")
+
+    # Empty mask: nothing to fan, so no stray Visible layer may appear.
+    before = len(image.get_layers())
+    config4 = proc.create_config()
+    config4.set_property("run-mode", Gimp.RunMode.NONINTERACTIVE)
+    config4.set_property("image", image)
+    config4.set_core_object_array("drawables", [image.get_layers()[0]])
+    config4.set_property("directions", 4)
+    config4.set_property("mask", 0)
+    config4.set_property("visible", True)
+    proc.run(config4)
+    check("visible empty mask adds no layer", len(image.get_layers()) == before,
+          f"{before}->{len(image.get_layers())}")
     image.delete()
 
 
